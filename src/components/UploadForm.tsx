@@ -1,0 +1,97 @@
+"use client";
+
+import { useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  ALLOWED_TYPES,
+  MAX_FILES,
+  validateScreenshotFiles,
+} from "@/lib/validateScreenshots";
+
+type Status = "idle" | "submitting" | "done";
+
+export function UploadForm() {
+  const [files, setFiles] = useState<File[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [status, setStatus] = useState<Status>("idle");
+
+  function handleFilesChange(event: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? []);
+    setStatus("idle");
+    setFiles(selected);
+    setErrors(validateScreenshotFiles(selected));
+  }
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+
+    const clientErrors = validateScreenshotFiles(files);
+    if (clientErrors.length > 0) {
+      setErrors(clientErrors);
+      return;
+    }
+
+    setStatus("submitting");
+
+    const formData = new FormData();
+    files.forEach((file) => formData.append("images", file));
+
+    const response = await fetch("/api/extract", {
+      method: "POST",
+      body: formData,
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      setErrors(result.errors ?? [result.error ?? "No se pudo procesar las capturas."]);
+      setStatus("idle");
+      return;
+    }
+
+    setErrors([]);
+    setStatus("done");
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex w-full max-w-md flex-col gap-4 text-left">
+      <div>
+        <label htmlFor="screenshots" className="block text-sm font-medium text-zinc-900">
+          Sube capturas de tus apps de préstamos (máx. {MAX_FILES})
+        </label>
+        <input
+          id="screenshots"
+          type="file"
+          accept={ALLOWED_TYPES.join(",")}
+          multiple
+          onChange={handleFilesChange}
+          className="mt-2 block w-full text-sm text-zinc-700"
+        />
+      </div>
+
+      <p className="text-sm text-zinc-500">
+        Tus capturas no se guardan. Se leen y se borran.
+      </p>
+
+      {errors.length > 0 && (
+        <ul className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {errors.map((error) => (
+            <li key={error}>{error}</li>
+          ))}
+        </ul>
+      )}
+
+      {status === "done" && (
+        <p className="rounded-md bg-teal-50 p-3 text-sm text-teal-800">
+          Capturas recibidas correctamente.
+        </p>
+      )}
+
+      <button
+        type="submit"
+        disabled={files.length === 0 || status === "submitting"}
+        className="rounded-full bg-teal-700 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-teal-800 disabled:opacity-50"
+      >
+        {status === "submitting" ? "Subiendo..." : "Subir capturas"}
+      </button>
+    </form>
+  );
+}
