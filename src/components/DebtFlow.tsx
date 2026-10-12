@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { UploadForm } from "@/components/UploadForm";
+import { ComprehensionStep } from "@/components/ComprehensionStep";
 import type { ExtractionResult } from "@/lib/extraction/core";
 import {
   computeQuincenaDue,
@@ -11,6 +12,8 @@ import {
   type DebtRow,
 } from "@/lib/debtMath";
 import { loadDebtState, saveDebtState } from "@/lib/localDebtStorage";
+
+type Phase = "review" | "comprehension" | "done";
 
 let rowIdCounter = 0;
 function nextRowId(): string {
@@ -32,6 +35,8 @@ export function DebtFlow() {
   const [confirmedAllApps, setConfirmedAllApps] = useState(false);
   const [simulated, setSimulated] = useState(false);
   const [manualEntry, setManualEntry] = useState(false);
+  const [phase, setPhase] = useState<Phase>("review");
+  const [tokenId, setTokenId] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = loadDebtState();
@@ -111,6 +116,40 @@ export function DebtFlow() {
   const quincena = computeQuincenaDue(rows, todayIso());
   const yearly = computeYearlyCost(rows);
   const incomplete = isPictureIncomplete(rows, confirmedAllApps);
+  const loansCount = Math.min(Math.max(rows.length, 1), 4);
+
+  if (phase === "done") {
+    return (
+      <div className="flex w-full max-w-md flex-col gap-3 rounded-xl bg-white p-4 text-center shadow-sm">
+        <p className="text-xl font-semibold text-zinc-900">
+          Listo. Ya viste tu panorama completo.
+        </p>
+        {tokenId && (
+          <p className="text-sm text-zinc-500">Folio: {tokenId.slice(0, 8)}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (phase === "comprehension") {
+    return (
+      <ComprehensionStep
+        total={total}
+        totalLabel={`Debes ${formatMXN(total)} en total`}
+        quincenaLabel={`Esta quincena pagas ${formatMXN(quincena)}`}
+        yearlyLabel={`Al año te cuesta ≈ ${
+          yearly.hasUnknown ? "desconocido" : formatMXN(yearly.amount)
+        } en intereses y comisiones`}
+        incomplete={incomplete}
+        pictureComplete={!incomplete}
+        loansCount={loansCount}
+        onFinished={(id) => {
+          setTokenId(id);
+          setPhase("done");
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex w-full max-w-md flex-col gap-4 text-left">
@@ -245,6 +284,14 @@ export function DebtFlow() {
           Puede faltar información. Este total podría ser mayor.
         </p>
       )}
+
+      <button
+        type="button"
+        onClick={() => setPhase("comprehension")}
+        className="rounded-full bg-teal-700 px-6 py-3 text-base font-medium text-white hover:bg-teal-800"
+      >
+        Entendido, sigo
+      </button>
     </div>
   );
 }
