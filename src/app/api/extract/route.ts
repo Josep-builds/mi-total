@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateScreenshotFiles } from "@/lib/validateScreenshots";
+import { runExtraction } from "@/lib/extraction/core";
+import { callGeminiVision } from "@/lib/extraction/gemini";
 
 export const runtime = "nodejs";
 
@@ -24,5 +26,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: errors[0], errors }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true, fileCount: files.length });
+  const result = await runExtraction({
+    hasApiKey: Boolean(process.env.GEMINI_API_KEY),
+    forceSimulated: process.env.USE_SIMULATED_AI === "true",
+    callGemini: () => callGeminiVision(files),
+  });
+
+  return NextResponse.json(result);
 }
